@@ -15,5 +15,5 @@ Each app is self-contained — see its own README for setup and usage. For examp
 ```bash
 cd play-4096
 cp .env.template .env   # then put your TYPESAFE_API_KEY into .env
-./run.sh --dry-run --max-moves 2 --start-delay-secs 0 --new-game
+./run.sh
 ```
