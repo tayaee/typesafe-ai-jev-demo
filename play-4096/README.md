@@ -23,7 +23,7 @@ Windows:
 
 ```bat
 run.bat
-./run.sh --move-delay-secs 0.4
+run.bat --move-delay-secs 0.4
 ```
 
 ## Tested on
