@@ -1,4 +1,4 @@
-# typesafe-ai-jev-demo
+# 4096 player powered by typesafe.ai
 
 Play [4096](https://thereal4096.github.io) (a 2048 variant) with the TypeSafe SystemOne judgment API (`jev-latest`).
 
