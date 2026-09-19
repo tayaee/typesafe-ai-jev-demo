@@ -21,9 +21,8 @@ The browser window is shown by default; pass `--headless` to hide it
 
 ```bash
 ./run.sh --help
-./run.sh --dry-run --max-moves 2 --start-delay-secs 0 --new-game
-./run.sh --connect browser-info --new-game --start-delay-secs 10
-./run.sh --move-delay-secs 0.4   # slower, watchable speed (default 0.0 = fastest)
+./run.sh
+./run.sh --move-delay-secs 0.4
 ```
 
 Windows:
