@@ -5,7 +5,8 @@
 """Play 4096 (https://thereal4096.github.io) with the TypeSafe SystemOne judgment API.
 
 Golden path (grilling Q1-Q5):
-  Q1 API   : state={board,score} object + single `choice` question `best_move`
+  Q1 API   : state={board,score} object + `choice` question `best_combo`
+             (multi-key sequence, ON by default; --no-combo for single best_move)
   Q2 env   : Playwright (external loop, API key stays server-side)
   Q3 read  : DOM `.tile-container .tile` parsing (tile-position-x-y + .tile-inner)
   Q4 move  : real keyboard path (ArrowUp/Right/Down/Left)
@@ -15,6 +16,11 @@ Usage:
   uv run play4096.py [--connect INFO] [--url URL] [--new-game] [--start-delay-secs 10]
                      [--max-moves N] [--dry-run] [--move-delay-secs 0.0] [--headless]
                      [--typesafe-api-key KEY] [--corner CORNER]
+                     [--no-combo] [--combos "down+left,down+down+left,right+left,up+down"]
+                     [--verbose]
+
+  Combo mode is ON by default (one API call -> key sequence pressed at once).
+  Use --no-combo for single-key mode.
 
 API key (priority order):
   1. --typesafe-api-key KEY (alias: --api-key)
@@ -126,9 +132,26 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--api-url", default="https://api.typesafe.ai/v1/systemone")
     p.add_argument("--shot-dir", default=None,
                    help="Save a PNG screenshot per move here (to watch the run).")
-    p.add_argument("--corner", default="lower-right",
+    p.add_argument("--corner", default="lower-left",
                    choices=["upper-left", "upper-right", "lower-left", "lower-right"],
-                   help="Corner to gather the largest tiles in (default: lower-right).")
+                   help="Corner to gather the largest tiles in (default: lower-left).")
+    p.add_argument("--combo", dest="combo", action="store_true", default=True,
+                   help="Multi-key mode: one API call recommends a key sequence "
+                        "(e.g. down+left) and the browser presses all keys at once. "
+                        "Default: ON.")
+    p.add_argument("--no-combo", dest="combo", action="store_false",
+                   help="Disable multi-key mode; fall back to single-key best_move.")
+    p.add_argument("--combos", default=None,
+                   help="Custom combo list, comma-separated, each '+'-joined, "
+                        "max 10 combos x max 4 keys "
+                        "(default: corner-aware 10 combos; "
+                        'e.g. --combos "down+left,down+down+left,right+left,up+down"). '
+                        "Implies --combo.")
+    p.add_argument("--verbose", action="store_true",
+                   help="Verbose logging: board dumps + full probs/timings. "
+                        "Default: one line per move "
+                        "([move ###] board score=###, typesafe.ai decision (#.### sec) "
+                        "=> <seq> prob #.##).")
     return p.parse_args()
 
 
@@ -205,6 +228,34 @@ def fmt_board(board) -> str:
     return "\n".join(" ".join(f"{v:5d}" for v in row) for row in board)
 
 
+def fmt_prob(probs: dict, key: str) -> str:
+    """Format probs[key] as #.##, '--' when unavailable (dry-run/fallback)."""
+    try:
+        v = probs.get(key) if isinstance(probs, dict) else None
+        return f"{float(v):.2f}" if v is not None else "--"
+    except (TypeError, ValueError):
+        return "--"
+
+
+def fmt_move_line(n: int, score: int, seq: str, probs: dict | None = None,
+                 dt_ms: float = 0.0) -> str:
+    try:
+        sec = f"{float(dt_ms) / 1000:.3f} sec"
+    except (TypeError, ValueError):
+        sec = "-- sec"
+    return (f"[move {n:03d}] board score={score}, typesafe.ai decision ({sec}) => "
+            f"{seq} prob {fmt_prob(probs or {}, seq)}")
+
+
+def fmt_usage(usage: dict | None) -> str:
+    """Format usage.input_tokens as in=123tok, 'in=--' when unavailable."""
+    try:
+        v = (usage or {}).get("input_tokens")
+        return f"in={int(v)}tok" if v is not None else "in=--"
+    except (TypeError, ValueError):
+        return "in=--"
+
+
 # --- 2048 slide simulation (dry-run validity filter) ---
 
 def _slide_row_left(row: list[int]) -> list[int]:
@@ -241,7 +292,7 @@ def valid_moves(board) -> list[str]:
     return [m for m in ("up", "right", "down", "left") if moved_board(board, m) != board]
 
 
-def heuristic_move(board, corner: str = "lower-right") -> str | None:
+def heuristic_move(board, corner: str = "lower-left") -> str | None:
     """Corner-weighted fallback; used for --dry-run and API failure."""
     vm = valid_moves(board)
     if not vm:
@@ -276,21 +327,24 @@ CORNER_DESCR = {
 }
 
 
-def build_instructions(corner: str = "lower-right") -> str:
-    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-right"])
+def build_instructions(corner: str = "lower-left") -> str:
+    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-left"])
     return (
         "You play 4096 (a 2048 variant) on a 4x4 grid. Rows go top-to-bottom, "
         "columns left-to-right, 0 means empty. Merge equal tiles by sliding; "
         "after each slide a 2 or 4 appears. Keep the largest tile in the "
         f"{descr} and the board organized so it can keep merging toward 4096. "
+        "If the rows near the corner are full and sorted descending toward it, "
+        "merge the stack above the edge column downward first; "
+        "do not shuffle the sorted rows. "
         "Given the board, reply with exactly one of up/down/left/right: the best next slide."
     )
 
 
-def build_criteria(corner: str = "lower-right") -> dict[str, str]:
+def build_criteria(corner: str = "lower-left") -> dict[str, str]:
     h_target = "right" if "right" in corner else "left"
     v_target = "down" if "lower" in corner else "up"
-    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-right"])
+    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-left"])
     base = {
         "up": "Slide all tiles up.",
         "right": "Slide all tiles right.",
@@ -311,22 +365,188 @@ MOVE_CRITERIA = build_criteria()
 INSTRUCTIONS = build_instructions()
 
 
-def call_systemone(board, score, api_url, api_key, model, timeout=30, corner: str = "lower-right"):
-    state = {
-        "game": "4096 (2048 variant), 4x4 grid, rows top-to-bottom, 0 = empty",
-        "board": board,
-        "score": score,
-        "goal": "Merge tiles to reach 4096 and beyond without filling the board.",
-        "strategy": f"Keep the largest tile in the {CORNER_DESCR.get(corner, corner)}.",
-    }
+# ---------------------------------------------------------------- combos (multi-key sequences)
+
+VALID_MOVES = ("up", "right", "down", "left")
+MAX_COMBOS = 10
+MAX_SEQ_LEN = 4
+
+
+def combo_specs(corner: str = "lower-left") -> list[tuple[str, list[str], str]]:
+    """Default 10 corner-aware sequences for 4096 strategy (each 1-4 keys).
+
+    lower-left corner example:
+      1. down+left                 : 주력 — 모서리로 모으는 기본 왕복
+      2. left+down                 : 주력 변형 — 가로 먼저 합친 뒤 아래로
+      3. down+down+left            : 많이 쓰임 — 세로로 두 번 눌러 합친 뒤 모서리로
+      4. left+left+down            : 가로로 두 번 합친 뒤 아래로
+      5. down+left+down+left       : 주력 2회 반복 (4키)
+      6. down+down+left+left       : 세로+가로 정리 (4키)
+      7. right+left                : down이 막혔을 때 긴급 — 오른쪽으로 틀었다 즉시 복귀
+      8. right+left+down           : 긴급 수평 왕복 후 아래로 모서리 복귀
+      9. up+down                   : 불가피하게 up을 눌렀으면 반드시 즉시 down 복구
+     10. up+down+left              : 강제 up 복구 후 왼쪽으로 모서리 복귀
+    Other corners mirror h/v targets (e.g. lower-right -> down+right ...).
+    """
+    h_target = "right" if "right" in corner else "left"
+    v_target = "down" if "lower" in corner else "up"
+    h_avoid = "left" if h_target == "right" else "right"
+    v_avoid = "up" if v_target == "down" else "down"
+    return [
+        (f"{v_target}+{h_target}", [v_target, h_target],
+         f"{v_target} then {h_target}: main loop, gather into the corner."),
+        (f"{h_target}+{v_target}", [h_target, v_target],
+         f"{h_target} then {v_target}: main-loop variant, merge rows first."),
+        (f"{v_target}+{v_target}+{h_target}", [v_target, v_target, h_target],
+         f"{v_target} twice then {h_target}: merge vertically, then gather. "
+         f"Sorted-board cleanup: merges the stack above the edge column into it."),
+        (f"{h_target}+{h_target}+{v_target}", [h_target, h_target, v_target],
+         f"{h_target} twice then {v_target}: merge horizontally, then gather."),
+        (f"{v_target}+{h_target}+{v_target}+{h_target}",
+         [v_target, h_target, v_target, h_target],
+         f"{v_target}-{h_target} twice: double main loop without new API call. "
+         f"Best pick when the two corner rows are full and sorted: merges the edge-column "
+         f"stack, then the row pair beside the corner, then drops, keeping sorted rows intact."),
+        (f"{v_target}+{v_target}+{h_target}+{h_target}",
+         [v_target, v_target, h_target, h_target],
+         f"2x {v_target} then 2x {h_target}: full tidy into the corner."),
+        (f"{h_avoid}+{h_target}", [h_avoid, h_target],
+         f"{h_avoid} then {h_target}: emergency when {v_target} is blocked, return at once."),
+        (f"{h_avoid}+{h_target}+{v_target}", [h_avoid, h_target, v_target],
+         f"{h_avoid} then {h_target} then {v_target}: emergency sidestep, then corner."),
+        (f"{v_avoid}+{v_target}", [v_avoid, v_target],
+         f"{v_avoid} then {v_target}: only when forced {v_avoid}, restore immediately."),
+        (f"{v_avoid}+{v_target}+{h_target}", [v_avoid, v_target, h_target],
+         f"{v_avoid} then {v_target} then {h_target}: forced {v_avoid} recovery into corner."),
+    ]
+
+
+def parse_combos_arg(s: str) -> list[tuple[str, list[str]]]:
+    """Parse --combos string into [(combo_id, [moves])]. Max 10 combos x 4 keys."""
+    parts = [p.strip() for p in s.split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--combos is empty")
+    if len(parts) > MAX_COMBOS:
+        raise ValueError(f"--combos takes at most {MAX_COMBOS} sequences (got {len(parts)})")
+    out: list[tuple[str, list[str]]] = []
+    for p in parts:
+        seq = [k.strip().lower() for k in re.split(r"[+\s>]+", p) if k.strip()]
+        if not seq:
+            raise ValueError(f"empty sequence in --combos: {p!r}")
+        if len(seq) > MAX_SEQ_LEN:
+            raise ValueError(f"sequence {p!r} exceeds max {MAX_SEQ_LEN} keys")
+        for k in seq:
+            if k not in VALID_MOVES:
+                raise ValueError(f"invalid move {k!r} in --combos (use up/down/left/right)")
+        out.append(("+".join(seq), seq))
+    # dedupe preserving order
+    seen: dict[str, list[str]] = {}
+    for cid, seq in out:
+        seen.setdefault(cid, seq)
+    return list(seen.items())
+
+
+def resolve_combos(args) -> list[tuple[str, list[str]]]:
+    """Return active combo list from --combos or corner-aware defaults."""
+    if args.combos:
+        return [(cid, seq) for cid, seq in parse_combos_arg(args.combos)]
+    return [(cid, seq) for cid, seq, _ in combo_specs(args.corner)]
+
+
+def build_combo_instructions(corner: str = "lower-left",
+                             specs: list[tuple[str, list[str], str]] | None = None) -> str:
+    specs = specs if specs is not None else combo_specs(corner)
+    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-left"])
+    h_target = "right" if "right" in corner else "left"
+    v_target = "down" if "lower" in corner else "up"
+    h_avoid = "left" if h_target == "right" else "right"
+    opts = ", ".join(f"{cid} (= {' then '.join(seq)})" for cid, seq, _ in specs)
+    return (
+        "You play 4096 (a 2048 variant) on a 4x4 grid. Rows go top-to-bottom, "
+        "columns left-to-right, 0 means empty. Merge equal tiles by sliding; "
+        "after each slide a 2 or 4 appears. Keep the largest tile in the "
+        f"{descr} and the board organized so it can keep merging toward 4096. "
+        "Sorted-board rule: if the two rows nearest the corner are full and sorted "
+        "descending toward the corner, prefer "
+        f"{v_target}+{h_target}+{v_target}+{h_target} or {v_target}+{v_target}+{h_target}: "
+        "they merge the tiles stacked above the edge column into it, then merge the row pair "
+        "beside the corner, then drop the result, without shuffling the sorted rows. "
+        f"Never lead with {h_avoid} when the corner row is full: "
+        "it drags the largest tile out of the corner. "
+        f"Given the board, reply with exactly one of: {opts}. "
+        "The browser will press the keys in that sequence at once, in order."
+    )
+
+
+def build_combo_criteria(corner: str = "lower-left",
+                         specs: list[tuple[str, list[str], str]] | None = None) -> dict[str, str]:
+    specs = specs if specs is not None else combo_specs(corner)
+    return {cid: f"Press {' then '.join(seq)} in order. {why}"
+            for cid, seq, why in specs}
+
+
+def apply_sequence(board: list[list[int]], seq: list[str]) -> list[list[int]]:
+    """Simulate a key sequence ignoring random new tiles (no-op steps skipped)."""
+    cur = [r[:] for r in board]
+    for m in seq:
+        nb = moved_board(cur, m)
+        if nb != cur:
+            cur = nb
+    return cur
+
+
+def heuristic_combo(board, corner: str = "lower-left",
+                    specs: list[tuple[str, list[str]]] | None = None) -> str | None:
+    """Corner-weighted fallback for combo mode; returns best combo_id."""
+    seqs: list[tuple[str, list[str]]]
+    if specs is not None:
+        seqs = specs
+    else:
+        seqs = [(cid, seq) for cid, seq, _ in combo_specs(corner)]
+
+    def weight(y: int, x: int) -> int:
+        tx = (3 - x) if "left" in corner else x
+        ty = (3 - y) if "upper" in corner else y
+        return 2 ** (tx + ty)
+
+    def score(b: list[list[int]]) -> tuple[int, int]:
+        s = sum(v * weight(y, x) for y, row in enumerate(b) for x, v in enumerate(row))
+        empty = sum(1 for row in b for v in row if v == 0)
+        return (s, empty)
+
+    best: str | None = None
+    best_key = None
+    for i, (cid, seq) in enumerate(seqs):
+        final = apply_sequence(board, seq)
+        if final == board:
+            continue  # whole sequence is a no-op on this board
+        k = (score(final), -i)
+        if best_key is None or k > best_key:
+            best_key, best = k, cid
+    if best is None:
+        # every combo is a no-op (rare): fall back to single-move heuristic
+        single = heuristic_move(board, corner)
+        if single is None:
+            return None
+        for cid, seq in seqs:
+            if seq and seq[0] == single:
+                return cid
+        return seqs[0][0]
+    return best
+
+
+def _post_choice(state: dict, question_name: str, instructions: str,
+                 criteria: dict[str, str], valid: set[str],
+                 api_url: str, api_key: str, model: str, timeout: int = 30):
+    """Shared SystemOne choice POST. Returns (choice, probs, conf, dt_ms, usage)."""
     payload = {
         "state": state,
         "model": model,
         "questions": {
-            "best_move": {
+            question_name: {
                 "type": "choice",
-                "instructions": build_instructions(corner),
-                "criteria": build_criteria(corner),
+                "instructions": instructions,
+                "criteria": criteria,
             }
         },
     }
@@ -345,15 +565,51 @@ def call_systemone(board, score, api_url, api_key, model, timeout=30, corner: st
     dt_ms = (time.perf_counter() - t0) * 1000
     try:
         data = json.loads(raw)
-        ans = data["answers"]["best_move"]
+        ans = data["answers"][question_name]
         choice = ans["choice"]
         probs = ans.get("probabilities", {})
         conf = ans.get("confidence")
+        usage = data.get("usage", {}) or {}
     except Exception as e:
         raise RuntimeError(f"Bad SystemOne response: {raw[:500]} ({e})") from e
-    if choice not in ("up", "down", "left", "right"):
-        raise RuntimeError(f"Model returned invalid move {choice!r}: {raw[:500]}")
-    return choice, probs, conf, dt_ms
+    if choice not in valid:
+        raise RuntimeError(f"Model returned invalid choice {choice!r}: {raw[:500]}")
+    return choice, probs, conf, dt_ms, usage
+
+
+def call_systemone(board, score, api_url, api_key, model, timeout=30, corner: str = "lower-left"):
+    state = {
+        "game": "4096 (2048 variant), 4x4 grid, rows top-to-bottom, 0 = empty",
+        "board": board,
+        "score": score,
+        "goal": "Merge tiles to reach 4096 and beyond without filling the board.",
+        "strategy": f"Keep the largest tile in the {CORNER_DESCR.get(corner, corner)}.",
+    }
+    return _post_choice(state, "best_move", build_instructions(corner),
+                        build_criteria(corner), {"up", "down", "left", "right"},
+                        api_url, api_key, model, timeout)
+
+
+def call_systemone_combo(board, score, api_url, api_key, model, timeout=30,
+                         corner: str = "lower-left",
+                         specs: list[tuple[str, list[str], str]] | None = None):
+    """Ask for one of the multi-key combos. Returns (combo_id, seq, probs, conf, dt, usage)."""
+    specs = specs if specs is not None else combo_specs(corner)
+    state = {
+        "game": "4096 (2048 variant), 4x4 grid, rows top-to-bottom, 0 = empty",
+        "board": board,
+        "score": score,
+        "goal": "Merge tiles to reach 4096 and beyond without filling the board.",
+        "strategy": f"Keep the largest tile in the {CORNER_DESCR.get(corner, corner)}. "
+                    "Prefer 2-4 key sequences; the browser presses them in order at once.",
+        "combos": {cid: "+".join(seq) for cid, seq, _ in specs},
+    }
+    choice, probs, conf, dt, usage = _post_choice(
+        state, "best_combo", build_combo_instructions(corner, specs),
+        build_combo_criteria(corner, specs), {cid for cid, _, _ in specs},
+        api_url, api_key, model, timeout)
+    seq = next(s for c, s, _ in specs if c == choice)
+    return choice, seq, probs, conf, dt, usage
 
 
 # ---------------------------------------------------------------- browser
@@ -426,6 +682,10 @@ def main() -> int:
     global STOP
     args = parse_args()
 
+    def vprint(*a, **k):
+        if args.verbose:
+            print(*a, **k)
+
     def on_sig(signum, frame):
         global STOP
         STOP = True
@@ -442,6 +702,35 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
+    combo_mode = bool(args.combo or args.combos)
+    combo_full: list[tuple[str, list[str], str]] = []
+    combo_by_id: dict[str, list[str]] = {}
+    if combo_mode:
+        try:
+            if args.combos:
+                parsed = parse_combos_arg(args.combos)
+                combo_full = [(cid, seq, f"Custom sequence {cid}: press in order.")
+                              for cid, seq in parsed]
+            else:
+                combo_full = combo_specs(args.corner)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        combo_by_id = {cid: seq for cid, seq, _ in combo_full}
+        print(f"[combo] multi-key mode: {len(combo_full)} options, "
+              f"{', '.join(cid for cid, _, _ in combo_full)}")
+        print("[prompt] instructions:")
+        print("  " + build_combo_instructions(args.corner, combo_full))
+        print("[prompt] criteria:")
+        for cid, seq, why in combo_full:
+            print(f"  {cid}: {why}")
+    else:
+        print("[prompt] instructions:")
+        print("  " + build_instructions(args.corner))
+        print("[prompt] criteria:")
+        for move, text in build_criteria(args.corner).items():
+            print(f"  {move}: {text}")
+
     from playwright.sync_api import sync_playwright
 
     pw = sync_playwright().start()
@@ -456,21 +745,21 @@ def main() -> int:
                 try:
                     info = json.load(open(connect_path))
                 except Exception as e:
-                    print(f"[connect] unreadable {connect_path}: {e}; relaunching.")
+                    vprint(f"[connect] unreadable {connect_path}: {e}; relaunching.")
             if info and info.get("cdp_url"):
                 cdp = info["cdp_url"]
-                print(f"[connect] attaching to {cdp} ...")
+                vprint(f"[connect] attaching to {cdp} ...")
                 browser = pw.chromium.connect_over_cdp(cdp)
-                print("[connect] attached. (script exit will NOT kill this browser)")
+                vprint("[connect] attached. (script exit will NOT kill this browser)")
             else:
                 port = args.remote_debugging_port or find_free_port()
                 profile = args.user_data_dir or (connect_path + ".profile")
-                print(f"[launch] detached Chrome port={port} profile={profile} "
-                      f"({'headed' if args.headed else 'headless'}) ...")
+                vprint(f"[launch] detached Chrome port={port} profile={profile} "
+                       f"({'headed' if args.headed else 'headless'}) ...")
                 cdp = launch_detached_chrome(profile, port, args.headed)
                 info = {"cdp_url": cdp, "user_data_dir": profile}
                 json.dump(info, open(connect_path, "w"), indent=2)
-                print(f"[launch] wrote {connect_path}; re-run with the same --connect to reattach.")
+                vprint(f"[launch] wrote {connect_path}; re-run with the same --connect to reattach.")
                 browser = pw.chromium.connect_over_cdp(cdp)
             ctx = browser.contexts[0] if browser.contexts else browser.new_context(viewport=VIEWPORT)
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
@@ -479,7 +768,7 @@ def main() -> int:
             except Exception:
                 pass
         else:
-            print("[launch] ephemeral browser (no --connect; closes on exit) ...")
+            vprint("[launch] ephemeral browser (no --connect; closes on exit) ...")
             exe = find_chrome_exe()
             if exe and os.path.basename(exe).startswith("chrome-headless-shell"):
                 exe = None  # bundled shell version skew; prefer system chrome below
@@ -491,7 +780,7 @@ def main() -> int:
                 browser = pw.chromium.launch(headless=not args.headed, channel="chrome",
                                              args=launch_args)
             except Exception as e:
-                print(f"[launch] channel=chrome failed ({e}); trying bundled chromium ...")
+                vprint(f"[launch] channel=chrome failed ({e}); trying bundled chromium ...")
                 browser = pw.chromium.launch(headless=not args.headed,
                                              args=launch_args)
             owns_browser = True
@@ -499,11 +788,11 @@ def main() -> int:
             page = ctx.new_page()
 
         page.add_init_script(CONFIRM_OVERRIDE)
-        print(f"[goto] {args.url}")
+        vprint(f"[goto] {args.url}")
         try:
             page.goto(args.url, wait_until="domcontentloaded", timeout=30000)
         except Exception as e:
-            print(f"[goto] warning: {e}")
+            vprint(f"[goto] warning: {e}")
         page.evaluate(CONFIRM_OVERRIDE)  # already-loaded page also needs it
         # NOTE: .tile-container is empty (hence hidden) until the first tiles
         # render, so wait for attached, not visible.
@@ -511,12 +800,12 @@ def main() -> int:
         page.wait_for_selector(".game-container", state="attached", timeout=15000)
 
         if args.new_game:
-            print("[game] New Game")
+            vprint("[game] New Game")
             page.click(".restart-button")
             time.sleep(0.6)
 
         if args.start_delay_secs > 0:
-            print(f"[wait] start in {args.start_delay_secs:.0f}s (--start-delay-secs) ...")
+            vprint(f"[wait] start in {args.start_delay_secs:.0f}s (--start-delay-secs) ...")
             t_end = time.time() + args.start_delay_secs
             while time.time() < t_end and not STOP:
                 time.sleep(0.2)
@@ -530,17 +819,19 @@ def main() -> int:
             try:
                 page.screenshot(path=os.path.join(args.shot_dir, f"{tag}.png"))
             except Exception as e:
-                print(f"[shot] failed: {e}")
+                vprint(f"[shot] failed: {e}")
 
         DIR = {"up": 0, "right": 1, "down": 2, "left": 3}
         moves = 0
         latencies: list[float] = []
+        tok_total = 0
         ended_no_move = False
         snap("move-000")
         while not STOP:
             board, score, over, won = wait_settled(page)
             if over:
-                print(f"[over] game over after {moves} moves, score={score}\n{fmt_board(board)}")
+                print(f"[over] game over after {moves} moves, score={score}")
+                vprint(fmt_board(board))
                 ended_no_move = True
                 break
             if won:
@@ -556,31 +847,99 @@ def main() -> int:
                 break
             vm = valid_moves(board)
             if not vm:
-                print(f"[over] no valid moves detected, score={score}\n{fmt_board(board)}")
+                print(f"[over] no valid moves detected, score={score}")
+                vprint(fmt_board(board))
                 ended_no_move = True
                 break
 
+            seq_to_press: list[str] = []
+            combo_id: str | None = None
+            if combo_mode:
+                combo_pairs = [(cid, seq) for cid, seq, _ in combo_full]
+                if args.dry_run:
+                    combo_id = heuristic_combo(board, args.corner, combo_pairs)
+                    probs, conf, dt, usage = {}, None, 0.0, {}
+                else:
+                    try:
+                        combo_id, seq, probs, conf, dt, usage = call_systemone_combo(
+                            board, score, args.api_url, api_key, args.model,
+                            corner=args.corner, specs=combo_full)
+                        latencies.append(dt)
+                        try:
+                            tok_total += int((usage or {}).get("input_tokens") or 0)
+                        except (TypeError, ValueError):
+                            pass
+                    except Exception as e:
+                        vprint(f"[api] {e}; heuristic fallback")
+                        combo_id = heuristic_combo(board, args.corner, combo_pairs)
+                        probs, conf, dt, usage = {}, None, 0.0, {}
+                    if combo_id is None or apply_sequence(board, combo_by_id[combo_id]) == board:
+                        ordered = sorted(probs, key=lambda k: probs[k], reverse=True) if probs else []
+                        alt = next((c for c in ordered + [c for c, _ in combo_pairs]
+                                    if c != combo_id and c in combo_by_id
+                                    and apply_sequence(board, combo_by_id[c]) != board), None)
+                        vprint(f"[warn] combo {combo_id} is no-op; trying {alt}")
+                        combo_id = alt or heuristic_combo(board, args.corner, combo_pairs)
+                if combo_id is None:
+                    print(f"[over] no effective combo, score={score}")
+                    vprint(fmt_board(board))
+                    ended_no_move = True
+                    break
+                seq_to_press = combo_by_id[combo_id]
+                print(fmt_move_line(moves + 1, score, combo_id, probs, dt))
+                if args.verbose:
+                    print(fmt_board(board))
+                    print(f"  -> {combo_id} ({'+'.join(seq_to_press)}) " + (
+                        f"({dt:.0f}ms conf={conf} {fmt_usage(usage)} probs={probs})"
+                        if not args.dry_run else "(dry-run)"))
+                for step in seq_to_press:
+                    if STOP:
+                        break
+                    if args.max_moves is not None and moves >= args.max_moves:
+                        break
+                    cur, _, _, _ = snapshot(page)
+                    page.keyboard.press(KEYS[step])
+                    moves += 1
+                    time.sleep(max(0.05, args.move_delay_secs))
+                    deadline = time.time() + 1.5
+                    while time.time() < deadline and not STOP:
+                        nb, _, _, _ = snapshot(page)
+                        if board_key(nb) != board_key(cur):
+                            break
+                        time.sleep(0.08)
+                if args.max_moves is not None and moves >= args.max_moves:
+                    print(f"[done] max-moves={args.max_moves} reached, score={score}")
+                    break
+                snap(f"move-{moves:03d}")
+                continue
+
             if args.dry_run:
                 move = heuristic_move(board, args.corner)
-                probs, conf, dt = {}, None, 0.0
+                probs, conf, dt, usage = {}, None, 0.0, {}
             else:
                 try:
-                    move, probs, conf, dt = call_systemone(
+                    move, probs, conf, dt, usage = call_systemone(
                         board, score, args.api_url, api_key, args.model, corner=args.corner)
                     latencies.append(dt)
+                    try:
+                        tok_total += int((usage or {}).get("input_tokens") or 0)
+                    except (TypeError, ValueError):
+                        pass
                 except Exception as e:
-                    print(f"[api] {e}; heuristic fallback")
-                    move, probs, conf, dt = heuristic_move(board, args.corner), {}, None, 0.0
+                    vprint(f"[api] {e}; heuristic fallback")
+                    move, probs, conf, dt, usage = heuristic_move(board, args.corner), {}, None, 0.0, {}
                 if move not in vm:
                     # model picked a dead direction: try next-best by probability
                     ordered = sorted(probs, key=lambda k: probs[k], reverse=True) if probs else []
                     alt = next((m for m in ordered + vm if m in vm and m != move), None)
-                    print(f"[warn] model said {move} (no-op); trying {alt}")
+                    vprint(f"[warn] model said {move} (no-op); trying {alt}")
                     move = alt or heuristic_move(board, args.corner)
 
-            print(f"[move {moves+1}] board score={score}\n{fmt_board(board)}")
-            print(f"  -> {move} " + (f"({dt:.0f}ms conf={conf} probs={probs})"
-                                     if not args.dry_run else "(dry-run)"))
+            print(fmt_move_line(moves + 1, score, move, probs, dt))
+            if args.verbose:
+                print(fmt_board(board))
+                print(f"  -> {move} " + (f"({dt:.0f}ms conf={conf} {fmt_usage(usage)} probs={probs})"
+                                         if not args.dry_run else "(dry-run)"))
             page.keyboard.press(KEYS[move])
             moves += 1
             time.sleep(max(0.05, args.move_delay_secs))
@@ -596,13 +955,14 @@ def main() -> int:
         if latencies:
             avg = sum(latencies) / len(latencies)
             print(f"[stats] moves={moves} api_calls={len(latencies)} "
-                  f"avg_latency={avg:.0f}ms min={min(latencies):.0f}ms max={max(latencies):.0f}ms")
+                  f"avg_latency={avg:.0f}ms min={min(latencies):.0f}ms max={max(latencies):.0f}ms "
+                  f"input_tokens={tok_total}")
         else:
             print(f"[stats] moves={moves} (no API calls)")
         snap("final")
         if ended_no_move and not STOP:
             try:
-                input("[exit] no more moves - press enter to exit ")
+                input("[exit] no more moves - press enter to exit")
             except (EOFError, KeyboardInterrupt):
                 pass
         return 0
@@ -611,8 +971,8 @@ def main() -> int:
         try:
             if connect_path:
                 pw.stop()
-                print(f"[exit] detached; browser stays alive. "
-                      f"Reattach: uv run play4096.py --connect {connect_path}")
+                vprint(f"[exit] detached; browser stays alive. "
+                       f"Reattach: uv run play4096.py --connect {connect_path}")
             else:
                 if browser and owns_browser:
                     try:
