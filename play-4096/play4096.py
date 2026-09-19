@@ -535,11 +535,13 @@ def main() -> int:
         DIR = {"up": 0, "right": 1, "down": 2, "left": 3}
         moves = 0
         latencies: list[float] = []
+        ended_no_move = False
         snap("move-000")
         while not STOP:
             board, score, over, won = wait_settled(page)
             if over:
                 print(f"[over] game over after {moves} moves, score={score}\n{fmt_board(board)}")
+                ended_no_move = True
                 break
             if won:
                 # keep going past 4096 instead of stopping on the win banner
@@ -555,6 +557,7 @@ def main() -> int:
             vm = valid_moves(board)
             if not vm:
                 print(f"[over] no valid moves detected, score={score}\n{fmt_board(board)}")
+                ended_no_move = True
                 break
 
             if args.dry_run:
@@ -597,6 +600,11 @@ def main() -> int:
         else:
             print(f"[stats] moves={moves} (no API calls)")
         snap("final")
+        if ended_no_move and not STOP:
+            try:
+                input("[exit] no more moves - press enter to exit ")
+            except (EOFError, KeyboardInterrupt):
+                pass
         return 0
     finally:
         # Never kill a --connect browser: just detach. Ephemeral: close.
