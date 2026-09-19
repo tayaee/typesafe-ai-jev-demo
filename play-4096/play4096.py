@@ -14,7 +14,7 @@ Golden path (grilling Q1-Q5):
 Usage:
   uv run play4096.py [--connect INFO] [--url URL] [--new-game] [--start-delay-secs 10]
                      [--max-moves N] [--dry-run] [--move-delay-secs 0.0] [--headless]
-                     [--typesafe-api-key KEY]
+                     [--typesafe-api-key KEY] [--corner CORNER]
 
 API key (priority order):
   1. --typesafe-api-key KEY (alias: --api-key)
@@ -126,6 +126,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--api-url", default="https://api.typesafe.ai/v1/systemone")
     p.add_argument("--shot-dir", default=None,
                    help="Save a PNG screenshot per move here (to watch the run).")
+    p.add_argument("--corner", default="lower-right",
+                   choices=["upper-left", "upper-right", "lower-left", "lower-right"],
+                   help="Corner to gather the largest tiles in (default: lower-right).")
     return p.parse_args()
 
 
@@ -238,41 +241,83 @@ def valid_moves(board) -> list[str]:
     return [m for m in ("up", "right", "down", "left") if moved_board(board, m) != board]
 
 
-def heuristic_move(board) -> str | None:
-    """Corner-seeking fallback order; used for --dry-run and API failure."""
+def heuristic_move(board, corner: str = "lower-right") -> str | None:
+    """Corner-weighted fallback; used for --dry-run and API failure."""
     vm = valid_moves(board)
     if not vm:
         return None
-    for m in ("left", "up", "right", "down"):
-        if m in vm:
-            return m
-    return vm[0]
+    # Weight grows exponentially toward the target corner so that merges
+    # pulling big tiles into the corner score highest.
+    def weight(y: int, x: int) -> int:
+        tx = (3 - x) if "left" in corner else x
+        ty = (3 - y) if "upper" in corner else y
+        return 2 ** (tx + ty)
+
+    def score(b: list[list[int]]) -> tuple[int, int]:
+        s = sum(v * weight(y, x) for y, row in enumerate(b) for x, v in enumerate(row))
+        empty = sum(1 for row in b for v in row if v == 0)
+        return (s, empty)
+
+    h_target = "right" if "right" in corner else "left"
+    v_target = "down" if "lower" in corner else "up"
+    h_avoid = "left" if h_target == "right" else "right"
+    v_avoid = "up" if v_target == "down" else "down"
+    preference = (h_target, v_target, h_avoid, v_avoid)
+    return max(vm, key=lambda m: (score(moved_board(board, m)), -preference.index(m)))
 
 
 # ---------------------------------------------------------------- API
 
-MOVE_CRITERIA = {
-    "up": "Slide all tiles up. Good when the biggest tiles are in the top rows.",
-    "right": "Slide all tiles right. Good when the biggest tiles are on the right.",
-    "down": "Slide all tiles down. Good when the biggest tiles are in the bottom rows.",
-    "left": "Slide all tiles left. Good when the biggest tiles are on the left.",
+CORNER_DESCR = {
+    "upper-left": "upper-left corner (top row, leftmost column)",
+    "upper-right": "upper-right corner (top row, rightmost column)",
+    "lower-left": "lower-left corner (bottom row, leftmost column)",
+    "lower-right": "lower-right corner (bottom row, rightmost column)",
 }
 
-INSTRUCTIONS = (
-    "You play 4096 (a 2048 variant) on a 4x4 grid. Rows go top-to-bottom, "
-    "columns left-to-right, 0 means empty. Merge equal tiles by sliding; "
-    "after each slide a 2 or 4 appears. Keep the largest tile in a corner "
-    "and the board organized so it can keep merging toward 4096. "
-    "Given the board, reply with exactly one of up/down/left/right: the best next slide."
-)
+
+def build_instructions(corner: str = "lower-right") -> str:
+    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-right"])
+    return (
+        "You play 4096 (a 2048 variant) on a 4x4 grid. Rows go top-to-bottom, "
+        "columns left-to-right, 0 means empty. Merge equal tiles by sliding; "
+        "after each slide a 2 or 4 appears. Keep the largest tile in the "
+        f"{descr} and the board organized so it can keep merging toward 4096. "
+        "Given the board, reply with exactly one of up/down/left/right: the best next slide."
+    )
 
 
-def call_systemone(board, score, api_url, api_key, model, timeout=30):
+def build_criteria(corner: str = "lower-right") -> dict[str, str]:
+    h_target = "right" if "right" in corner else "left"
+    v_target = "down" if "lower" in corner else "up"
+    descr = CORNER_DESCR.get(corner, CORNER_DESCR["lower-right"])
+    base = {
+        "up": "Slide all tiles up.",
+        "right": "Slide all tiles right.",
+        "down": "Slide all tiles down.",
+        "left": "Slide all tiles left.",
+    }
+    criteria: dict[str, str] = {}
+    for move, text in base.items():
+        if move in (h_target, v_target):
+            criteria[move] = f"{text} Excellent: pushes tiles toward the {descr}."
+        else:
+            criteria[move] = f"{text} Usually bad: moves tiles away from the {descr}."
+    return criteria
+
+
+MOVE_CRITERIA = build_criteria()
+
+INSTRUCTIONS = build_instructions()
+
+
+def call_systemone(board, score, api_url, api_key, model, timeout=30, corner: str = "lower-right"):
     state = {
         "game": "4096 (2048 variant), 4x4 grid, rows top-to-bottom, 0 = empty",
         "board": board,
         "score": score,
         "goal": "Merge tiles to reach 4096 and beyond without filling the board.",
+        "strategy": f"Keep the largest tile in the {CORNER_DESCR.get(corner, corner)}.",
     }
     payload = {
         "state": state,
@@ -280,8 +325,8 @@ def call_systemone(board, score, api_url, api_key, model, timeout=30):
         "questions": {
             "best_move": {
                 "type": "choice",
-                "instructions": INSTRUCTIONS,
-                "criteria": MOVE_CRITERIA,
+                "instructions": build_instructions(corner),
+                "criteria": build_criteria(corner),
             }
         },
     }
@@ -306,7 +351,7 @@ def call_systemone(board, score, api_url, api_key, model, timeout=30):
         conf = ans.get("confidence")
     except Exception as e:
         raise RuntimeError(f"Bad SystemOne response: {raw[:500]} ({e})") from e
-    if choice not in MOVE_CRITERIA:
+    if choice not in ("up", "down", "left", "right"):
         raise RuntimeError(f"Model returned invalid move {choice!r}: {raw[:500]}")
     return choice, probs, conf, dt_ms
 
@@ -513,22 +558,22 @@ def main() -> int:
                 break
 
             if args.dry_run:
-                move = heuristic_move(board)
+                move = heuristic_move(board, args.corner)
                 probs, conf, dt = {}, None, 0.0
             else:
                 try:
                     move, probs, conf, dt = call_systemone(
-                        board, score, args.api_url, api_key, args.model)
+                        board, score, args.api_url, api_key, args.model, corner=args.corner)
                     latencies.append(dt)
                 except Exception as e:
                     print(f"[api] {e}; heuristic fallback")
-                    move, probs, conf, dt = heuristic_move(board), {}, None, 0.0
+                    move, probs, conf, dt = heuristic_move(board, args.corner), {}, None, 0.0
                 if move not in vm:
                     # model picked a dead direction: try next-best by probability
                     ordered = sorted(probs, key=lambda k: probs[k], reverse=True) if probs else []
                     alt = next((m for m in ordered + vm if m in vm and m != move), None)
                     print(f"[warn] model said {move} (no-op); trying {alt}")
-                    move = alt or heuristic_move(board)
+                    move = alt or heuristic_move(board, args.corner)
 
             print(f"[move {moves+1}] board score={score}\n{fmt_board(board)}")
             print(f"  -> {move} " + (f"({dt:.0f}ms conf={conf} probs={probs})"
