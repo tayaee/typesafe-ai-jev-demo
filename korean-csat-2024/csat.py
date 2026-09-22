@@ -79,7 +79,7 @@ def parse_args(argv=None):
     p.add_argument("--model", default="jev-latest", help="Jev 모델명 (기본값: jev-latest)")
     p.add_argument(
         "-o", "--output", default=None,
-        help="결과 JSON 파일 경로 (기본값: result-<subject>-<machine-id>.json)",
+        help="결과 JSON 파일 경로 (기본값: result-csat-<subject>-<machine-id>.json)",
     )
     p.add_argument("--timeout", type=int, default=60, help="문항당 API 타임아웃(초, 기본값: 60)")
     p.add_argument("--retries", type=int, default=3, help="실패 시 재시도 횟수 (기본값: 3)")
@@ -397,7 +397,7 @@ def main(argv=None):
         "items": rows,
     }
 
-    out_path = args.output or f"result-{args.subject_id}-{get_machine_id()}.json"
+    out_path = args.output or f"result-csat-{args.subject_id}-{get_machine_id()}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"결과 저장: {out_path}", file=sys.stderr)
