@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import sys
+import unicodedata
 
 
 def parse_args(argv=None):
@@ -127,28 +128,54 @@ def sweep_rows(items):
     return rows
 
 
-def line_for(target, r):
-    if r["status"] == "no_reject":
-        return (
-            f"정확도 {fmt_target(target)}: 기각 없이 달성 "
-            f"(전체 {r['kept']}문항, 정답률 {pct(r['accuracy'])})"
-        )
-    if r["status"] == "achieved":
-        return (
-            f"정확도 {fmt_target(target)}를 확보하기 위해서는 "
-            f"confidence {fmt_threshold(r['threshold'])} 이하를 모름 처리해야 함 "
-            f"({r['rejected']}개 기각, {r['kept']}개만 남김)"
-        )
-    return (
-        f"정확도 {fmt_target(target)}: 달성 불가 "
-        f"(최고 도달 정답률 {pct(r['best_accuracy'])}, 유지 {r['best_kept']}문항)"
-    )
+def _dlen(s):
+    return sum(2 if unicodedata.east_asian_width(c) in ("F", "W") else 1 for c in s)
+
+
+def _pad(s, w, align="<"):
+    rem = max(0, w - _dlen(s))
+    if align == ">":
+        return " " * rem + s
+    elif align == "^":
+        l = rem // 2
+        return " " * l + s + " " * (rem - l)
+    return s + " " * rem
 
 
 def render_text(path, subject, items, targets, detail):
-    out = [f"=== {path} (전체 {len(items)}문항, 전체 정답률 {pct(accuracy_of(items))})"]
+    n = len(items)
+    base_acc = accuracy_of(items)
+    out = [
+        f"=== {path} (전체 {n}문항, 전체 정답률 {pct(base_acc)})",
+        "※ 목표 accuracy 확보를 위한 confidence 기각 기준과 수용률:",
+    ]
+    headers = ["목표", "기각 기준", "기각 / 수용", "수용률"]
+    widths = [6, 13, 13, 8]
+    out.append("  " + " | ".join(_pad(h, w, "^") for h, w in zip(headers, widths)))
+
     for t in targets:
-        out.append(line_for(t, analyze(items, t)))
+        r = analyze(items, t)
+        tgt_s = fmt_target(t)
+        if r["status"] == "no_reject":
+            criteria = "기각 없음"
+            rej_kept = f"0 / {n}"
+            acc_rate = "100.0%"
+        elif r["status"] == "achieved":
+            criteria = f"conf ≤ {fmt_threshold(r['threshold'])}"
+            rej_kept = f"{r['rejected']} / {r['kept']}"
+            acc_rate = pct(r["kept"] / n)
+        else:
+            criteria = "달성 불가"
+            rej_kept = "-"
+            acc_rate = f"(최고 {pct(r['best_accuracy'])})"
+        row = [
+            _pad(tgt_s, widths[0], "^"),
+            _pad(criteria, widths[1], "<"),
+            _pad(rej_kept, widths[2], "^"),
+            _pad(acc_rate, widths[3], ">"),
+        ]
+        out.append("  " + " | ".join(row))
+
     if detail:
         out.append("")
         out.append(f"--- {subject or path} 스윕 테이블 (임계값 이하 기각)")
