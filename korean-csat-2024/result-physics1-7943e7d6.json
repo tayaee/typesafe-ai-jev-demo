@@ -1,0 +1,425 @@
+{
+  "exam": "2024학년도 대학수학능력시험 (2023-11-16 시행)",
+  "subject_id": "physics1",
+  "subject_name": "물리학Ⅰ",
+  "model": "jev-1.13.0",
+  "total_questions": 19,
+  "excluded_count": 1,
+  "excluded_score": 3,
+  "original_max_score": 50,
+  "max_score": 47,
+  "total_score": 12,
+  "percentage": 25.5,
+  "excluded_items": [
+    {
+      "id": "physics1-17",
+      "number": 17,
+      "points": 3,
+      "n_choices": 0,
+      "answer": 1,
+      "answer_label": "①",
+      "reason": "보기 없음(이미지 선택지/그림 필요)"
+    }
+  ],
+  "items": [
+    {
+      "id": "physics1-01",
+      "number": 1,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 4,
+      "answer_label": "④",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.52,
+      "probabilities": {
+        "2": 0.05,
+        "3": 0.02,
+        "4": 0.28,
+        "1": 0.61,
+        "5": 0.04
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-02",
+      "number": 2,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 2,
+      "answer_label": "②",
+      "jev_answer": 3,
+      "jev_label": "③",
+      "jev_choice_raw": "3",
+      "confidence": 0.07,
+      "probabilities": {
+        "3": 0.25,
+        "4": 0.23,
+        "5": 0.15,
+        "1": 0.19,
+        "2": 0.18
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-03",
+      "number": 3,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 1,
+      "answer_label": "①",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.15,
+      "probabilities": {
+        "3": 0.2,
+        "1": 0.33,
+        "5": 0.13,
+        "2": 0.18,
+        "4": 0.16
+      },
+      "score": 3,
+      "correct": true
+    },
+    {
+      "id": "physics1-04",
+      "number": 4,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 1,
+      "answer_label": "①",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.62,
+      "probabilities": {
+        "5": 0.06,
+        "2": 0.06,
+        "3": 0.12,
+        "4": 0.06,
+        "1": 0.7
+      },
+      "score": 2,
+      "correct": true
+    },
+    {
+      "id": "physics1-05",
+      "number": 5,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 4,
+      "answer_label": "④",
+      "jev_answer": 5,
+      "jev_label": "⑤",
+      "jev_choice_raw": "5",
+      "confidence": 0.12,
+      "probabilities": {
+        "4": 0.29,
+        "2": 0.11,
+        "3": 0.16,
+        "5": 0.29,
+        "1": 0.15
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-06",
+      "number": 6,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 2,
+      "answer_label": "②",
+      "jev_answer": 2,
+      "jev_label": "②",
+      "jev_choice_raw": "2",
+      "confidence": 0.2,
+      "probabilities": {
+        "2": 0.36,
+        "5": 0.13,
+        "1": 0.19,
+        "3": 0.14,
+        "4": 0.18
+      },
+      "score": 2,
+      "correct": true
+    },
+    {
+      "id": "physics1-07",
+      "number": 7,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 3,
+      "answer_label": "③",
+      "jev_answer": 5,
+      "jev_label": "⑤",
+      "jev_choice_raw": "5",
+      "confidence": 0.48,
+      "probabilities": {
+        "4": 0.03,
+        "2": 0.03,
+        "5": 0.59,
+        "1": 0.23,
+        "3": 0.12
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-08",
+      "number": 8,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 3,
+      "answer_label": "③",
+      "jev_answer": 5,
+      "jev_label": "⑤",
+      "jev_choice_raw": "5",
+      "confidence": 0.22,
+      "probabilities": {
+        "2": 0.05,
+        "4": 0.11,
+        "3": 0.25,
+        "1": 0.21,
+        "5": 0.38
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-09",
+      "number": 9,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 5,
+      "answer_label": "⑤",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.12,
+      "probabilities": {
+        "2": 0.11,
+        "5": 0.2,
+        "3": 0.26,
+        "4": 0.14,
+        "1": 0.29
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-10",
+      "number": 10,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 1,
+      "answer_label": "①",
+      "jev_answer": 5,
+      "jev_label": "⑤",
+      "jev_choice_raw": "5",
+      "confidence": 0.09,
+      "probabilities": {
+        "1": 0.18,
+        "3": 0.18,
+        "2": 0.15,
+        "5": 0.27,
+        "4": 0.22
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-11",
+      "number": 11,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 4,
+      "answer_label": "④",
+      "jev_answer": 4,
+      "jev_label": "④",
+      "jev_choice_raw": "4",
+      "confidence": 0.08,
+      "probabilities": {
+        "4": 0.27,
+        "2": 0.16,
+        "5": 0.2,
+        "1": 0.16,
+        "3": 0.21
+      },
+      "score": 2,
+      "correct": true
+    },
+    {
+      "id": "physics1-12",
+      "number": 12,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 2,
+      "answer_label": "②",
+      "jev_answer": 4,
+      "jev_label": "④",
+      "jev_choice_raw": "4",
+      "confidence": 0.37,
+      "probabilities": {
+        "2": 0.41,
+        "1": 0.01,
+        "3": 0.02,
+        "4": 0.5,
+        "5": 0.06
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-13",
+      "number": 13,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 3,
+      "answer_label": "③",
+      "jev_answer": 5,
+      "jev_label": "⑤",
+      "jev_choice_raw": "5",
+      "confidence": 0.09,
+      "probabilities": {
+        "1": 0.19,
+        "5": 0.28,
+        "3": 0.22,
+        "2": 0.12,
+        "4": 0.19
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-14",
+      "number": 14,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 3,
+      "answer_label": "③",
+      "jev_answer": 4,
+      "jev_label": "④",
+      "jev_choice_raw": "4",
+      "confidence": 0.09,
+      "probabilities": {
+        "5": 0.27,
+        "1": 0.12,
+        "2": 0.08,
+        "3": 0.26,
+        "4": 0.27
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-15",
+      "number": 15,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 5,
+      "answer_label": "⑤",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.03,
+      "probabilities": {
+        "1": 0.23,
+        "4": 0.22,
+        "5": 0.18,
+        "3": 0.22,
+        "2": 0.15
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-16",
+      "number": 16,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 5,
+      "answer_label": "⑤",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.16,
+      "probabilities": {
+        "5": 0.14,
+        "2": 0.24,
+        "3": 0.12,
+        "4": 0.18,
+        "1": 0.32
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-18",
+      "number": 18,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 5,
+      "answer_label": "⑤",
+      "jev_answer": 3,
+      "jev_label": "③",
+      "jev_choice_raw": "3",
+      "confidence": 0.13,
+      "probabilities": {
+        "2": 0.08,
+        "5": 0.21,
+        "3": 0.31,
+        "4": 0.23,
+        "1": 0.17
+      },
+      "score": 0,
+      "correct": false
+    },
+    {
+      "id": "physics1-19",
+      "number": 19,
+      "points": 3,
+      "n_choices": 5,
+      "answer": 4,
+      "answer_label": "④",
+      "jev_answer": 4,
+      "jev_label": "④",
+      "jev_choice_raw": "4",
+      "confidence": 0.27,
+      "probabilities": {
+        "3": 0.24,
+        "1": 0.16,
+        "5": 0.07,
+        "2": 0.12,
+        "4": 0.41
+      },
+      "score": 3,
+      "correct": true
+    },
+    {
+      "id": "physics1-20",
+      "number": 20,
+      "points": 2,
+      "n_choices": 5,
+      "answer": 2,
+      "answer_label": "②",
+      "jev_answer": 1,
+      "jev_label": "①",
+      "jev_choice_raw": "1",
+      "confidence": 0.18,
+      "probabilities": {
+        "5": 0.1,
+        "4": 0.13,
+        "2": 0.24,
+        "3": 0.18,
+        "1": 0.35
+      },
+      "score": 0,
+      "correct": false
+    }
+  ]
+}
