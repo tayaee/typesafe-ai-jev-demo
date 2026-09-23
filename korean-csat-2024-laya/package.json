@@ -1,0 +1,27 @@
+{
+  "name": "korean-csat-2024-laya",
+  "version": "0.1.0",
+  "description": "Solve Korean CSAT 2024 questions with a local Laya System-1 model (open-source Jev-compatible, ONNX Runtime)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/csat-laya.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@receptron/laya": "^0.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.30.0": true,
+    "esbuild@0.28.2": true
+  }
+}

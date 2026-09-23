@@ -1,6 +1,11 @@
-# korean-csat-2024
+# korean-csat-2024-jev
 
 CSAT(수능) 문제를 Jev(System One)에게 그대로 출제하고 채점하는 프로그램.
+
+Sibling: [`../korean-csat-2024-laya/`](../korean-csat-2024-laya/) — 같은 문제를 로컬
+[Laya](https://github.com/receptron/laya) (open-source Jev-compatible System-1 모델,
+ONNX Runtime, API 키 불필요)로 푼다. 출제 형식과 채점/출력 스키마를 동일하게
+유지해 두 백엔드의 결과를 비교할 수 있다.
 
 ## 실행
 
