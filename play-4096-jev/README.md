@@ -1,6 +1,8 @@
-# 4096 player powered by typesafe.ai
+# play-4096-jev — 4096 player powered by typesafe.ai (Jev API)
 
 Play [4096](https://thereal4096.github.io) (a 2048 variant) with the TypeSafe SystemOne judgment API (`jev-latest`).
+
+Sibling: [`../play-4096-laya/`](../play-4096-laya/) plays the same game with a local [Laya](https://github.com/receptron/laya) model (no API key).
 
 ## Setup
 

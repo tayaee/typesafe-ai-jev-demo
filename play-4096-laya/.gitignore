@@ -1,0 +1,6 @@
+node_modules/
+dist/
+shots/
+.env
+.play4096-laya-browser.json
+.play4096-laya-browser.json.profile/

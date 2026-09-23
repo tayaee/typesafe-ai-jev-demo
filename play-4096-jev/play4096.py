@@ -100,7 +100,7 @@ def load_dotenv(paths: list[str] | None = None) -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Play 4096 with TypeSafe SystemOne (choice/best_move).")
-    p.add_argument("--connect", nargs="?", const=".play4096-browser.json", default=None,
+    p.add_argument("--connect", nargs="?", const=".play4096-jev-browser.json", default=None,
                    help="Path to browser-info JSON for persistent Chrome reuse. "
                         "Missing file -> launch detached Chrome and write it; "
                         "existing file -> attach to the running Chrome.")
