@@ -7,6 +7,9 @@
 #   "pydantic-ai-slim>=2.0",
 #   "httpx>=0.27",
 #   "transformers>=4.57",
+#   "pillow",        # VLM image processors (Qwen-VL, InternVL, Cosmos, SmolVLM)
+#   "torchvision",   # dito
+#   "num2words",     # SmolVLM processor
 #   "accelerate",
 #   "huggingface_hub",
 #   "torch",
