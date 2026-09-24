@@ -110,6 +110,80 @@ def test_web_list_models_runs_without_heavy_deps():
     assert "Qwen/Qwen3.5-2B" in r.stdout and "nvidia/Cosmos-Reason2-2B" in r.stdout
 
 
+def test_new_small_models_resolve():
+    for hid in [
+        "nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1",
+        "nvidia/Cosmos-Reason2-8B",
+        "Qwen/Qwen3-0.6B",
+        "Qwen/Qwen3-1.7B",
+        "Qwen/Qwen2.5-0.5B-Instruct",
+        "Qwen/Qwen3-VL-2B-Instruct",
+        "Qwen/Qwen2.5-VL-3B-Instruct",
+        "OpenGVLab/InternVL3_5-1B-HF",
+        "OpenGVLab/InternVL3_5-2B-HF",
+        "openbmb/MiniCPM-V-4_5",
+        "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+        "HuggingFaceTB/SmolLM3-3B",
+        "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+    ]:
+        assert resolve(hid.lower()).hf_id == hid
+
+
+def test_vlm_specs_use_image_text_task():
+    vlm = {m.hf_id for m in MODELS if m.task == "image-text-to-text"}
+    assert {
+        "nvidia/Cosmos-Reason2-2B",
+        "nvidia/Cosmos-Reason2-8B",
+        "Qwen/Qwen3-VL-2B-Instruct",
+        "Qwen/Qwen2.5-VL-3B-Instruct",
+        "OpenGVLab/InternVL3_5-1B-HF",
+        "OpenGVLab/InternVL3_5-2B-HF",
+        "openbmb/MiniCPM-V-4_5",
+        "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+    } <= vlm
+    text = {m.hf_id for m in MODELS if m.task == "text-generation"}
+    assert {"Qwen/Qwen3-0.6B", "nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1"} <= text
+
+
+def test_generate_wraps_text_for_vlm_task(monkeypatch):
+    import local_backend as lb
+
+    calls: dict = {}
+
+    class FakePipe:
+        tokenizer = None
+
+        def __call__(self, *a, **k):
+            calls["args"] = a
+            calls["kwargs"] = k
+            return [{"generated_text": '{"noul": 0.5}'}]
+
+    monkeypatch.setattr(lb, "_pipe", FakePipe())
+    monkeypatch.setattr(lb, "_pipe_task", "image-text-to-text")
+    assert lb.generate("hello") == '{"noul": 0.5}'
+    assert calls["args"] == ()
+    assert calls["kwargs"]["text"][0]["role"] == "user"
+
+
+def test_generate_plain_string_for_text_task(monkeypatch):
+    import local_backend as lb
+
+    calls: dict = {}
+
+    class FakePipe:
+        tokenizer = None
+
+        def __call__(self, *a, **k):
+            calls["args"] = a
+            calls["kwargs"] = k
+            return [{"generated_text": "hi"}]
+
+    monkeypatch.setattr(lb, "_pipe", FakePipe())
+    monkeypatch.setattr(lb, "_pipe_task", "text-generation")
+    assert lb.generate("hello") == "hi"
+    assert calls["args"] == ("hello",)
+
+
 def test_run_model_default_is_qwen():
     from web import build_parser
 

@@ -22,6 +22,7 @@ class ModelSpec:
     vram: str  # rough requirement
     recommended: bool
     note: str  # why this model
+    task: str = "text-generation"  # transformers pipeline task (VLMs: image-text-to-text)
 
 
 MODELS: list[ModelSpec] = [
@@ -52,6 +53,7 @@ MODELS: list[ModelSpec] = [
         recommended=False,
         note="Strict <=2B NVIDIA edge model (physical-AI VLM, text queries OK). "
         "Accept the license on its HF page and pass --hf-token.",
+        task="image-text-to-text",
     ),
     ModelSpec(
         hf_id="nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16",
@@ -62,6 +64,137 @@ MODELS: list[ModelSpec] = [
         recommended=False,
         note="Strongest NVIDIA edge text model (over the 2B budget). "
         "Mamba hybrid: on CUDA you may need mamba_ssm + causal_conv1d.",
+    ),
+    # --- NVIDIA edge: smaller / reasoning ---
+    ModelSpec(
+        hf_id="nvidia/Llama-3.1-Nemotron-Nano-4B-v1.1",
+        params="4B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~9GB (bf16) / Jetson, single RTX",
+        recommended=False,
+        note="NVIDIA edge reasoning text model (Llama-3.1 based, 128K ctx). "
+        "NVIDIA Open Model License.",
+    ),
+    ModelSpec(
+        hf_id="nvidia/Cosmos-Reason2-8B",
+        params="8.77B",
+        gated=True,
+        trust_remote_code=True,
+        vram="~18GB (bf16) / AGX Orin+",
+        recommended=False,
+        note="Bigger Cosmos physical-AI VLM (Qwen3-VL-8B based, text queries OK). "
+        "Accept the license on its HF page and pass --hf-token.",
+        task="image-text-to-text",
+    ),
+    # --- China: Qwen tiny text ---
+    ModelSpec(
+        hf_id="Qwen/Qwen3-0.6B",
+        params="0.6B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~1.5GB (bf16) / CPU (Q4 ~0.5GB)",
+        recommended=False,
+        note="Smallest Qwen3, CPU-runnable, 100+ langs. Apache 2.0.",
+    ),
+    ModelSpec(
+        hf_id="Qwen/Qwen3-1.7B",
+        params="1.7B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~4GB (bf16) / CPU (Q4)",
+        recommended=False,
+        note="Balanced tiny Qwen3, thinking/non-thinking modes. Apache 2.0.",
+    ),
+    ModelSpec(
+        hf_id="Qwen/Qwen2.5-0.5B-Instruct",
+        params="0.49B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~1GB / CPU proven",
+        recommended=False,
+        note="Smallest Qwen2.5 instruct, 29 langs incl. Korean. Apache 2.0.",
+    ),
+    # --- China: tiny VLMs (text queries OK) ---
+    ModelSpec(
+        hf_id="Qwen/Qwen3-VL-2B-Instruct",
+        params="2B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~5GB (bf16)",
+        recommended=False,
+        note="Best tiny open VLM, 256K ctx. Apache 2.0.",
+        task="image-text-to-text",
+    ),
+    ModelSpec(
+        hf_id="Qwen/Qwen2.5-VL-3B-Instruct",
+        params="3B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~6GB (bf16) / Orin Nano class (Q4)",
+        recommended=False,
+        note="Proven 3B VLM, needs transformers>=4.37. Apache 2.0.",
+        task="image-text-to-text",
+    ),
+    ModelSpec(
+        hf_id="OpenGVLab/InternVL3_5-1B-HF",
+        params="1.1B",
+        gated=False,
+        trust_remote_code=True,
+        vram="~2.5GB (bf16)",
+        recommended=False,
+        note="Smallest strong Chinese VLM. Apache 2.0.",
+        task="image-text-to-text",
+    ),
+    ModelSpec(
+        hf_id="OpenGVLab/InternVL3_5-2B-HF",
+        params="2.3B",
+        gated=False,
+        trust_remote_code=True,
+        vram="~5GB (bf16)",
+        recommended=False,
+        note="2B InternVL3.5, reasoning + GUI/embodied. Apache 2.0.",
+        task="image-text-to-text",
+    ),
+    ModelSpec(
+        hf_id="openbmb/MiniCPM-V-4_5",
+        params="8.7B",
+        gated=False,
+        trust_remote_code=True,
+        vram="~18GB (bf16) / 9GB (int4)",
+        recommended=False,
+        note="Top <=10B Chinese VLM (OpenCompass 77.0). Apache 2.0.",
+        task="image-text-to-text",
+    ),
+    # --- CPU-tiny (HF Smol family) ---
+    ModelSpec(
+        hf_id="HuggingFaceTB/SmolLM2-1.7B-Instruct",
+        params="1.7B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~3.5GB (bf16) / CPU (Q4)",
+        recommended=False,
+        note="CPU-friendly instruct + function calling. Apache 2.0, English-only.",
+    ),
+    ModelSpec(
+        hf_id="HuggingFaceTB/SmolLM3-3B",
+        params="3B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~6GB (bf16) / CPU (Q4)",
+        recommended=False,
+        note="3B SOTA, hybrid reasoning, 128K ctx. Needs transformers>=4.53. "
+        "No Korean/Chinese.",
+    ),
+    ModelSpec(
+        hf_id="HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+        params="0.5B",
+        gated=False,
+        trust_remote_code=False,
+        vram="~1.2GB / CPU",
+        recommended=False,
+        note="Smallest video VLM, on-device. Apache 2.0.",
+        task="image-text-to-text",
     ),
 ]
 

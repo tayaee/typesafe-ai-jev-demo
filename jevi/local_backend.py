@@ -35,6 +35,7 @@ DEVICE_ENV = "JEV_CLONE_DEVICE"  # device_map override, e.g. cpu (default: auto)
 
 _pipe = None
 _pipe_id: str | None = None
+_pipe_task: str = "text-generation"
 
 
 def active_model_ref() -> str | None:
@@ -70,7 +71,7 @@ def load(model_ref: str):
     Fails fast with a human-readable error: web.py calls this at startup so
     a bad model/gated repo never becomes a silently-degraded server.
     """
-    global _pipe, _pipe_id
+    global _pipe, _pipe_id, _pipe_task
     spec = resolve(model_ref)
     if spec.hf_id == TEST_MODEL:
         raise ValueError("--model test needs no weights (nothing to load)")
@@ -82,7 +83,7 @@ def load(model_ref: str):
         raise RuntimeError("transformers/torch not installed. Run via `uv run web.py run ...`") from e
     try:
         _pipe = pipeline(
-            "text-generation",
+            spec.task,
             model=spec.hf_id,
             trust_remote_code=spec.trust_remote_code,
             device_map=os.environ.get(DEVICE_ENV, "auto"),
@@ -92,6 +93,7 @@ def load(model_ref: str):
     except Exception as e:
         raise RuntimeError(_load_hint(spec, e)) from e
     _pipe_id = spec.hf_id
+    _pipe_task = spec.task
     return _pipe
 
 
@@ -113,17 +115,26 @@ def _load_hint(spec: ModelSpec, e: Exception) -> str:
 
 
 def generate(prompt: str, max_new_tokens: int = 256) -> str:
+    """Run one text-only prompt. VLM pipes get a text-only chat message."""
     if _pipe is None:
         raise RuntimeError("local model not loaded (call load() first)")
     try:
-        eos = _pipe.tokenizer.eos_token_id
-        out = _pipe(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            return_full_text=False,
-            pad_token_id=eos,
-        )
+        call_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,
+            "return_full_text": False,
+        }
+        tok = getattr(_pipe, "tokenizer", None)
+        eos = tok.eos_token_id if tok is not None else None
+        if eos is not None:
+            call_kwargs["pad_token_id"] = eos
+        if _pipe_task == "image-text-to-text":
+            out = _pipe(
+                text=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+                **call_kwargs,
+            )
+        else:
+            out = _pipe(prompt, **call_kwargs)
     except Exception as e:
         raise RuntimeError(f"generation failed: {e}") from e
     return out[0]["generated_text"]

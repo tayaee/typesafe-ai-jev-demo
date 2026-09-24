@@ -6,7 +6,7 @@
 #   "pydantic>=2.7",
 #   "pydantic-ai-slim>=2.0",
 #   "httpx>=0.27",
-#   "transformers>=4.55",
+#   "transformers>=4.57",
 #   "accelerate",
 #   "huggingface_hub",
 #   "torch",
@@ -99,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", default=DEFAULT_MODEL,
         help=f"Real HF repo id or 'test' (default: {DEFAULT_MODEL}).",
     )
-    r.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1).")
+    r.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0).")
     r.add_argument("--port", type=int, default=7001, help="Bind port (default: 7001).")
     r.add_argument(
         "--hf-token", default=os.environ.get("HF_TOKEN"),
